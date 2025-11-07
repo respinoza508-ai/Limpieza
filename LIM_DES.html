@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>App de Programación de Inspecciones</title>
+    <!-- Carga de Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Configuración de Tailwind para usar la fuente Inter y un color primario -->
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f7f7;
+        }
+        .container-card {
+            /* Sombra suave y atractiva */
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8 min-h-screen">
+
+    <div class="max-w-6xl mx-auto space-y-8">
+        <header class="text-center">
+            <h1 class="text-3xl font-extrabold text-blue-700">Programa de Limpieza y Desinfección</h1>
+            <p class="text-gray-600 mt-1">Herramienta de supervisión para la programación de inspecciones en granja.</p>
+        </header>
+
+        <!-- PARTE 1: Selección de Granjas y Fechas de Inicio -->
+        <div id="farm-selection-section" class="container-card bg-white p-6 rounded-xl">
+            <h2 class="text-xl font-semibold mb-4 text-gray-800 border-b pb-2">1. Programar Granja (Día 1 de Limpieza)</h2>
+            <div id="farm-inputs-container" class="space-y-4">
+                <!-- Los campos de granja se inyectarán aquí -->
+            </div>
+            <button id="add-farm-btn" class="mt-4 w-full bg-blue-500 text-white py-3 px-4 rounded-lg hover:bg-blue-600 transition duration-150 shadow-md disabled:opacity-50 text-base font-semibold">
+                Añadir Granja (Máx 15)
+            </button>
+        </div>
+
+        <!-- PARTE 2: Consulta de Actividades por Fecha de Inspección -->
+        <div id="inspection-schedule-section" class="container-card bg-white p-6 rounded-xl">
+            <h2 class="text-xl font-semibold mb-4 text-gray-800 border-b pb-2">2. Consultar Inspección</h2>
+            <div class="flex flex-col sm:flex-row items-center space-y-3 sm:space-y-0 sm:space-x-4">
+                <label for="inspection-date" class="font-medium text-gray-700 w-full sm:w-auto text-sm sm:text-base">Fecha de Inspección:</label>
+                <input type="date" id="inspection-date" class="form-input mt-1 block w-full sm:w-64 border-gray-300 rounded-lg shadow-sm focus:border-blue-500 focus:ring-blue-500 p-3 text-base">
+            </div>
+
+            <div id="results-container" class="mt-6 space-y-4">
+                <p class="text-gray-500">Selecciona una fecha de inspección y añade al menos una granja para ver el cronograma.</p>
+                <!-- Los resultados se mostrarán aquí -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- DATA DE LA APLICACIÓN ---
+        // Lista completa de granjas disponibles
+        const FARM_LIST = [
+            "GRANJA", "CIELO 1", "CIELO 2", "CIELO 3", "CIELO 4", "CIELO 5", "CIELO 6", "CIELO 7", "GAVILAN", "LITERA 1",
+            "LITERA 3", "BERMEJO 6", "BERMEJO 8", "AMPLIACION", "BERMEJO 4", "ATAHUAMPA A", "ATAHUAMPA B", "SUAREZ", "EL GORDO",
+            "OJA", "TRES PALOS", "ALBERTO", "JFA", "JFB", "SAN JUAN", "OSCAR", "SAN PEDRO", "SAN PEDRO 2", "SAN PEDRO 1",
+            "YUZURIHA", "MOMIY", "DON JOSUE", "SANTA ROSA", "ESTEBAN", "TIROLER", "SINCHI", "INFANTES", "AUCALLAMA 1",
+            "PARAISO 1", "PARAISO 2", "PARAISO 3", "PARAISO 4", "PARAISO 5", "DOÑA LUISA"
+        ];
+
+        // Mapeo de actividades y el rango de días de limpieza (min-max) en que se realizan
+        const ACTIVITIES = [
+            { name: "Retiro de equipos, amarrado de drizas, sacudido de cortinas, levantado de niples, desatado de cielo raso y paleado de mallas.", min: 1, max: 1, icon: '🛠️', critical: false },
+            { name: "Quemado de plumas.", min: 1, max: 2, icon: '🔥', critical: false },
+            { name: "Trinchado y bordeado del pastoreo.", min: 1, max: 2, icon: '🌱', critical: false },
+            { name: "Aireado y roturado.", min: 1, max: 2, icon: '🌬️', critical: false },
+            { name: "Aplicación insecticida posventa (cama, pastoreo, palos centrales y laterales).", min: 1, max: 2, icon: '🐜', critical: true }, // CRÍTICA
+            { name: "Lavado de galpón y silos de alimento.", min: 3, max: 4, icon: '🧼', critical: false },
+            { name: "Aplicación de cal.", min: 3, max: 4, icon: '⚪', critical: false },
+            { name: "Rufado.", min: 3, max: 4, icon: '⛏️', critical: false },
+            { name: "Compostaje y rastrillado - ensacado guano residual.", min: 4, max: 5, icon: '🗑️', critical: true }, // CRÍTICA
+            { name: "Aplicación insecticida poscompost (cresta de camellón, base de palos centrales y laterales).", min: 4, max: 5, icon: '🐛', critical: true }, // CRÍTICA
+            { name: "Cobertura de los camellones.", min: 4, max: 5, icon: '🛡️', critical: false },
+            { name: "Enjuague líneas de niples, tuberías de gas.", min: 5, max: 6, icon: '🚿', critical: false },
+            { name: "Control de Temperatura, humedad y amoniaco.", min: 5, max: 11, icon: '🌡️', critical: false },
+            { name: "Lavado y desinfección de equipos (Platos y tolvas).", min: 5, max: 6, icon: '💧', critical: false },
+            { name: "Lavado de cortinas sobrantes (tapas, portones y colgantes).", min: 5, max: 6, icon: '🧼', critical: false },
+            { name: "Barrido de calles y botado.", min: 6, max: 7, icon: '🧹', critical: false },
+            { name: "Control de roedores", min: 8, max: 16, icon: '🐀', critical: false },
+            { name: "Retiro de cobertura plástica.", min: 10, max: 11, icon: '♻️', critical: false },
+            { name: "Control de malezas (deshierbado general)", min: 10, max: 11, icon: '🌿', critical: false },
+            { name: "Tendído y 1er. aireado compost.", min: 11, max: 12, icon: '💨', critical: false },
+            { name: "Limpieza de almacenes, oficina, comedor y vestuarios.", min: 12, max: 13, icon: '🏢', critical: false },
+            { name: "Lavado y almacenamiento de la cobertura plástica.", min: 12, max: 12, icon: '📦', critical: false },
+            { name: "2do. Aireado compost.", min: 12, max: 13, icon: '💨💨', critical: false },
+            { name: "Tercer aireado (Opcional).", min: 14, max: 14, icon: '💨💨💨', critical: false },
+            { name: "Recepción de material de cama (Según requerimiento de granja).", min: 14, max: 14, icon: '🛏️', critical: false },
+            { name: "Roturado final, nivelado y flameado.", min: 15, max: 16, icon: '🚜', critical: false }
+        ];
+
+        // Estado global para almacenar las granjas programadas
+        let scheduledFarms = [];
+        const MAX_FARMS = 15;
+
+        // --- REFERENCIAS DOM ---
+        const farmInputsContainer = document.getElementById('farm-inputs-container');
+        const addFarmBtn = document.getElementById('add-farm-btn');
+        const inspectionDateInput = document.getElementById('inspection-date');
+        const resultsContainer = document.getElementById('results-container');
+
+        // --- FUNCIONES DE UTILIDAD ---
+
+        /**
+         * Calcula el "Día de Limpieza" (Working Day Number) contando los días no domingo
+         * entre la fecha de inicio (inclusive) y la fecha de inspección (inclusive).
+         * @param {string} startDateStr - Fecha de inicio de limpieza (YYYY-MM-DD).
+         * @param {string} inspectionDateStr - Fecha de inspección (YYYY-MM-DD).
+         * @returns {number} El número de día de limpieza.
+         */
+        function getCleaningDay(startDateStr, inspectionDateStr) {
+            // Aseguramos que la hora sea medianoche para evitar problemas de zona horaria
+            const start = new Date(startDateStr + 'T00:00:00');
+            const inspection = new Date(inspectionDateStr + 'T00:00:00');
+
+            if (inspection < start) return 0; // La limpieza aún no ha comenzado
+
+            let workingDayCount = 0;
+            let currentDate = new Date(start);
+
+            // Iterar día por día
+            while (currentDate <= inspection) {
+                // getDay() retorna 0 para Domingo. Si NO es domingo, es un día de limpieza.
+                if (currentDate.getDay() !== 0) {
+                    workingDayCount++;
+                }
+                // Avanzar al siguiente día
+                currentDate.setDate(currentDate.getDate() + 1);
+            }
+            return workingDayCount;
+        }
+
+        /**
+         * Retorna las actividades programadas para un día de limpieza específico.
+         * @param {number} day - El número del día de limpieza (X).
+         * @returns {Array} Lista de actividades.
+         */
+        function getActivitiesForDay(day) {
+            return ACTIVITIES.filter(activity => day >= activity.min && day <= activity.max);
+        }
+
+        // --- GESTIÓN DE GRANJAS PROGRAMADAS (PARTE 1) ---
+
+        /**
+         * Crea el HTML para una fila de selección de granja y fecha.
+         * @param {string} id - ID único para la fila.
+         * @param {boolean} isFirst - Indica si es la primera granja, la cual no se puede eliminar.
+         * @returns {string} HTML de la fila.
+         */
+        function createFarmRowHtml(id, isFirst = false) {
+            const options = FARM_LIST.map(farm => `<option value="${farm}">${farm}</option>`).join('');
+            
+            // Lógica para el botón de eliminar. La primera granja tiene un placeholder inactivo.
+            const removeButtonHtml = isFirst
+                ? `<span class="p-3 text-gray-400 flex items-center justify-center" title="La primera granja no se puede eliminar. Solo modificar.">
+                       <!-- Icono de No permitido -->
+                       <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+                       </svg>
+                   </span>`
+                : `<button
+                    data-id="${id}"
+                    class="remove-farm-btn p-3 text-red-500 hover:text-red-700 transition duration-150 flex items-center justify-center"
+                    aria-label="Eliminar granja"
+                    title="Eliminar granja"
+                >
+                    <!-- Icono de Basura/Eliminar -->
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                </button>`;
+
+            return `
+                <!-- Optimización Móvil: Los campos se apilan en móvil (flex-col) y se vuelven horizontales en sm: (flex-row) -->
+                <div id="farm-row-${id}" class="farm-row flex flex-col sm:flex-row items-center space-y-3 sm:space-y-0 sm:space-x-3 p-3 bg-gray-50 rounded-xl border">
+                    <!-- Selector de Granja -->
+                    <select
+                        id="select-farm-${id}"
+                        data-id="${id}"
+                        class="farm-select w-full sm:w-1/2 p-3 border-gray-300 rounded-lg shadow-sm focus:border-blue-500 focus:ring-blue-500 text-base"
+                    >
+                        <option value="">-- Seleccionar Granja --</option>
+                        ${options}
+                    </select>
+
+                    <!-- Input de Fecha -->
+                    <input
+                        type="date"
+                        id="date-start-${id}"
+                        data-id="${id}"
+                        class="date-input w-full sm:w-auto p-3 border-gray-300 rounded-lg shadow-sm focus:border-blue-500 focus:ring-blue-500 text-base"
+                        disabled
+                    >
+
+                    <!-- Botón de Eliminar / Placeholder (Siempre al final) -->
+                    ${removeButtonHtml}
+                </div>
+            `;
+        }
+
+        /**
+         * Añade una nueva fila de selección de granja si no se supera el límite.
+         */
+        function addFarmRow() {
+            if (scheduledFarms.length >= MAX_FARMS) {
+                addFarmBtn.disabled = true;
+                return;
+            }
+
+            const id = crypto.randomUUID();
+            // Si el array está vacío, esta será la primera granja, que es ineliminable.
+            const isFirst = scheduledFarms.length === 0; 
+
+            const newFarmEntry = { id: id, farm: '', startDate: '' };
+            scheduledFarms.push(newFarmEntry);
+            
+            // Insertamos el HTML de la nueva fila
+            farmInputsContainer.insertAdjacentHTML('beforeend', createFarmRowHtml(id, isFirst));
+
+            updateAvailableFarms();
+            updateAddButtonState();
+        }
+
+        /**
+         * Elimina una fila de selección de granja y actualiza el estado.
+         * @param {string} id - ID de la fila a eliminar.
+         */
+        function removeFarm(id) {
+            // Filtramos la lista para quitar la granja con el ID dado
+            scheduledFarms = scheduledFarms.filter(farm => farm.id !== id);
+            const row = document.getElementById(`farm-row-${id}`);
+            if (row) row.remove();
+            
+            // Si la lista queda vacía (y ya se había añadido la primera fila), 
+            // volvemos a asegurar que haya al menos una (la ineliminable).
+            if (scheduledFarms.length === 0) {
+                 addFarmRow();
+            }
+
+            updateAvailableFarms();
+            updateAddButtonState();
+            renderResults(); // Actualizar resultados al eliminar
+        }
+
+        /**
+         * Actualiza el estado de los selectores para que no se repitan granjas.
+         */
+        function updateAvailableFarms() {
+            const selectedFarms = scheduledFarms.map(f => f.farm).filter(f => f);
+            const farmSelects = farmInputsContainer.querySelectorAll('.farm-select');
+
+            farmSelects.forEach(select => {
+                const currentSelected = select.value;
+                select.querySelectorAll('option').forEach(option => {
+                    const farmName = option.value;
+                    // Deshabilita las granjas que ya están seleccionadas en otra fila,
+                    // excepto la que está seleccionada actualmente en este selector.
+                    if (farmName !== '' && selectedFarms.includes(farmName) && farmName !== currentSelected) {
+                        option.disabled = true;
+                    } else {
+                        option.disabled = false;
+                    }
+                });
+            });
+        }
+
+        /**
+         * Habilita/deshabilita el botón de añadir granja.
+         */
+        function updateAddButtonState() {
+            // Solo se puede añadir una nueva granja si la última que se añadió es válida
+            // (tiene granja y fecha) y no se ha alcanzado el máximo.
+            const lastFarm = scheduledFarms[scheduledFarms.length - 1];
+            const isLastValid = lastFarm && lastFarm.farm && lastFarm.startDate;
+            const isMaxReached = scheduledFarms.length >= MAX_FARMS;
+
+            addFarmBtn.disabled = isMaxReached || !isLastValid;
+            addFarmBtn.textContent = isMaxReached ? `Máximo de ${MAX_FARMS} Granjas Alcanzado` : 'Añadir Granja (Máx 15)';
+        }
+
+        /**
+         * Maneja los eventos de cambio en los selectores y fechas.
+         * @param {Event} e - Evento de cambio.
+         */
+        function handleFarmInputChange(e) {
+            const id = e.target.dataset.id;
+            const field = e.target.classList.contains('farm-select') ? 'farm' : 'startDate';
+            const value = e.target.value;
+
+            const farmEntry = scheduledFarms.find(f => f.id === id);
+            if (farmEntry) {
+                farmEntry[field] = value;
+
+                // Lógica de habilitación de fecha al seleccionar granja
+                if (field === 'farm') {
+                    const dateInput = document.getElementById(`date-start-${id}`);
+                    dateInput.disabled = !value;
+                    if (!value) {
+                         dateInput.value = ''; // Limpiar fecha si deselecciona
+                         farmEntry.startDate = ''; // Limpiar estado
+                    }
+                }
+            }
+
+            updateAvailableFarms();
+            updateAddButtonState();
+            renderResults(); // Recalcular resultados
+        }
+
+        // --- RENDERIZADO DE RESULTADOS (PARTE 2) ---
+
+        /**
+         * Renderiza la tabla de resultados de la inspección, ordenando las granjas
+         * por su fecha de inicio de limpieza (ascendente).
+         */
+        function renderResults() {
+            const inspectionDateStr = inspectionDateInput.value;
+            // Filtramos solo las granjas que tienen nombre y fecha de inicio
+            let validFarms = scheduledFarms.filter(f => f.farm && f.startDate);
+            resultsContainer.innerHTML = '';
+
+            if (!inspectionDateStr || validFarms.length === 0) {
+                // Si falta la fecha de inspección o no hay granjas válidas, mostramos mensaje.
+                resultsContainer.innerHTML = `<p class="text-gray-500 mt-4">${!inspectionDateStr ? 'Ingresa la Fecha de Inspección' : 'Añade y programa al menos una Granja'}</p>`;
+                return;
+            }
+
+            // 1. ORDENAR GRANJAS por fecha de inicio (más antigua primero)
+            validFarms.sort((a, b) => new Date(a.startDate) - new Date(b.startDate));
+
+
+            const inspectionDate = new Date(inspectionDateStr + 'T00:00:00');
+            const dayOfWeek = inspectionDate.getDay(); // 0 = Domingo, 1 = Lunes, etc.
+            const isSunday = dayOfWeek === 0;
+
+            let html = `<div class="space-y-6">`;
+
+            validFarms.forEach(farm => {
+                const cleaningDay = getCleaningDay(farm.startDate, inspectionDateStr);
+                const activities = getActivitiesForDay(cleaningDay);
+                let content;
+                let dayLabel;
+                let cardColor = 'bg-white border-l-4 border-blue-500'; // Default
+
+                if (isSunday) {
+                    // Caso 1: Domingo (Día de descanso)
+                    content = `<p class="text-lg font-bold text-red-600">Día de descanso - No hay actividades programadas.</p>`;
+                    dayLabel = `Día Limpieza: N/A`;
+                    cardColor = 'bg-red-50 border-l-4 border-red-500';
+                } else if (cleaningDay === 0) {
+                    // Caso 2: Inspección antes del inicio
+                    content = `<p class="text-lg font-semibold text-yellow-600">¡Aún no inicia el proceso!</p><p class="text-gray-500 text-sm">Inicio: ${farm.startDate}</p>`;
+                    dayLabel = `Día Limpieza: 0`;
+                    cardColor = 'bg-yellow-50 border-l-4 border-yellow-500';
+                } else {
+                    // Caso 3: Proceso de limpieza activo
+                    dayLabel = `<span class="font-bold text-lg text-blue-700">Día Limpieza: ${cleaningDay}</span>`;
+                    if (activities.length > 0) {
+                        // Hay actividades programadas para este día
+                        content = `<ul class="space-y-2 text-gray-700 list-none">` +
+                                  activities.map(a => {
+                                    const criticalBadge = a.critical ? '<span class="text-red-600 font-bold ml-1 text-sm">(CRÍTICO 🚨)</span>' : '';
+                                    // Resaltar actividades críticas
+                                    const listItemClass = a.critical ? 'bg-red-100/50 p-2 rounded-lg border border-red-200' : 'p-2 bg-gray-100 rounded-lg';
+                                    return `<li class="flex items-start ${listItemClass}"><span class="mr-2 text-xl flex-shrink-0">${a.icon}</span><span class="text-sm sm:text-base">${a.name}${criticalBadge}</span></li>`;
+                                  }).join('') +
+                                  `</ul>`;
+                        cardColor = 'bg-white border-l-4 border-blue-500';
+                    } else {
+                        // No hay actividades en el rol para este día específico
+                        content = `<p class="text-lg font-semibold text-green-600">Día ${cleaningDay}: No hay actividades de rol programadas.</p>`;
+                        cardColor = 'bg-green-50 border-l-4 border-green-500';
+                    }
+                }
+
+                const dayName = inspectionDate.toLocaleDateString('es-ES', { weekday: 'long' });
+
+                html += `
+                    <div class="${cardColor} p-4 rounded-xl shadow-lg transition hover:shadow-xl">
+                        <h3 class="text-2xl font-bold text-gray-900 mb-2">${farm.farm}</h3>
+                        <!-- Etiqueta de fecha más compacta en móvil -->
+                        <div class="mb-3 text-sm text-gray-600 space-y-1">
+                            <span class="block">Inspección: <strong>${dayName}, ${inspectionDateStr}</strong></span>
+                            <span class="block text-xs">Ingreso a Limpieza: ${farm.startDate}</span>
+                        </div>
+                        <div class="text-md mb-3 border-b pb-2">
+                            ${dayLabel}
+                        </div>
+                        <div class="space-y-2">
+                            <h4 class="font-bold mb-2 text-gray-800 text-base">Actividades a Supervisar:</h4>
+                            ${content}
+                        </div>
+                    </div>
+                `;
+            });
+
+            html += `</div>`;
+            resultsContainer.innerHTML = html;
+        }
+
+        // --- INICIALIZACIÓN Y LISTENERS ---
+
+        function init() {
+            // 1. Inicializar con una fila de granja por defecto (la ineliminable)
+            addFarmRow();
+
+            // 2. Listeners para la Parte 1 (Selección de Granjas)
+            farmInputsContainer.addEventListener('change', (e) => {
+                if (e.target.classList.contains('farm-select') || e.target.classList.contains('date-input')) {
+                    handleFarmInputChange(e);
+                }
+            });
+            
+            farmInputsContainer.addEventListener('click', (e) => {
+                // Delegación de eventos para eliminar granjas
+                if (e.target.closest('.remove-farm-btn')) {
+                    const id = e.target.closest('.remove-farm-btn').dataset.id;
+                    removeFarm(id);
+                }
+            });
+
+            addFarmBtn.addEventListener('click', addFarmRow);
+            
+            // 3. Listener para la Parte 2 (Fecha de Inspección)
+            inspectionDateInput.addEventListener('change', renderResults);
+
+            // 4. Establecer la fecha mínima de inspección a la fecha actual
+            const today = new Date();
+            const yyyy = today.getFullYear();
+            const mm = String(today.getMonth() + 1).padStart(2, '0');
+            const dd = String(today.getDate()).padStart(2, '0');
+            inspectionDateInput.min = `${yyyy}-${mm}-${dd}`;
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>
